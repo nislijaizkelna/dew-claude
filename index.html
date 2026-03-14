@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dew Point Calculator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px;
+      gap: 24px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: #f8fafc;
+    }
+
+    .subtitle {
+      font-size: 0.875rem;
+      color: #64748b;
+      margin-top: 4px;
+      text-align: center;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      width: 100%;
+      max-width: 780px;
+    }
+
+    .graph-wrapper {
+      position: relative;
+      background: #1e2130;
+      border: 1px solid #2d3348;
+      border-radius: 12px;
+      padding: 16px 16px 16px 16px;
+      width: 100%;
+    }
+
+    canvas {
+      display: block;
+      cursor: crosshair;
+      border-radius: 6px;
+    }
+
+    .result-card {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .card {
+      background: #1e2130;
+      border: 1px solid #2d3348;
+      border-radius: 10px;
+      padding: 18px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 160px;
+      flex: 1;
+    }
+
+    .card.highlight {
+      border-color: #3b82f6;
+      background: #1a2540;
+    }
+
+    .card-label {
+      font-size: 0.75rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .card-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+
+    .card-value span {
+      font-size: 1rem;
+      font-weight: 400;
+      color: #94a3b8;
+    }
+
+    .card.highlight .card-value {
+      color: #60a5fa;
+    }
+
+    .card-sub {
+      font-size: 0.75rem;
+      color: #475569;
+    }
+
+    .temp-toggle {
+      display: flex;
+      gap: 8px;
+      background: #1e2130;
+      border: 1px solid #2d3348;
+      border-radius: 8px;
+      padding: 4px;
+    }
+
+    .temp-toggle button {
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      padding: 6px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: all 0.15s;
+    }
+
+    .temp-toggle button.active {
+      background: #3b82f6;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .hint {
+      font-size: 0.8rem;
+      color: #475569;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <h1>Dew Point Calculator</h1>
+    <p class="subtitle">Click anywhere on the chart to set temperature &amp; relative humidity</p>
+  </div>
+
+  <div class="temp-toggle">
+    <button id="btnC" class="active" onclick="setUnit('C')">°C</button>
+    <button id="btnF" onclick="setUnit('F')">°F</button>
+  </div>
+
+  <div class="container">
+    <div class="graph-wrapper">
+      <canvas id="chart"></canvas>
+    </div>
+
+    <div class="result-card">
+      <div class="card">
+        <div class="card-label">Temperature</div>
+        <div class="card-value" id="valTemp">—</div>
+        <div class="card-sub">selected</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Relative Humidity</div>
+        <div class="card-value" id="valRH">—<span>%</span></div>
+        <div class="card-sub">selected</div>
+      </div>
+      <div class="card highlight">
+        <div class="card-label">Dew Point</div>
+        <div class="card-value" id="valDew">—</div>
+        <div class="card-sub" id="valComfort">click to calculate</div>
+      </div>
+    </div>
+
+    <p class="hint">Uses the Magnus formula &nbsp;·&nbsp; X axis = Temperature &nbsp;·&nbsp; Y axis = Relative Humidity</p>
+  </div>
+
+  <script>
+    // ── State ────────────────────────────────────────────────────────────────
+    let unit = 'C';
+    let selectedPt = null; // { tempC, rh }
+
+    // Axis ranges (always stored in °C internally)
+    const TEMP_MIN_C = -10;
+    const TEMP_MAX_C = 50;
+    const RH_MIN = 0;
+    const RH_MAX = 100;
+
+    // ── Magnus formula ───────────────────────────────────────────────────────
+    function dewPointC(tempC, rh) {
+      const a = 17.625, b = 243.04;
+      const gamma = Math.log(rh / 100) + (a * tempC) / (b + tempC);
+      return (b * gamma) / (a - gamma);
+    }
+
+    function toF(c) { return c * 9 / 5 + 32; }
+    function toC(f) { return (f - 32) * 5 / 9; }
+
+    function fmt(c) {
+      const v = unit === 'C' ? c : toF(c);
+      return v.toFixed(1) + '°' + unit;
+    }
+
+    function comfortLabel(dpC) {
+      if (dpC < 10)  return 'Very dry / comfortable';
+      if (dpC < 16)  return 'Comfortable';
+      if (dpC < 21)  return 'Somewhat humid';
+      if (dpC < 24)  return 'Quite humid';
+      return 'Oppressive';
+    }
+
+    // ── Canvas setup ─────────────────────────────────────────────────────────
+    const canvas = document.getElementById('chart');
+    const ctx = canvas.getContext('2d');
+
+    // Margins around the plot area
+    const M = { top: 20, right: 20, bottom: 50, left: 54 };
+
+    function resize() {
+      const wrapper = canvas.parentElement;
+      const w = wrapper.clientWidth - 32; // subtract wrapper padding
+      canvas.width  = w;
+      canvas.height = Math.round(w * 0.55);
+      draw();
+    }
+
+    // Convert data → pixel
+    function px(tempC, rh) {
+      const W = canvas.width  - M.left - M.right;
+      const H = canvas.height - M.top  - M.bottom;
+      const x = M.left + ((tempC - TEMP_MIN_C) / (TEMP_MAX_C - TEMP_MIN_C)) * W;
+      const y = M.top  + (1 - (rh - RH_MIN) / (RH_MAX - RH_MIN)) * H;
+      return { x, y };
+    }
+
+    // Convert pixel → data
+    function data(px, py) {
+      const W = canvas.width  - M.left - M.right;
+      const H = canvas.height - M.top  - M.bottom;
+      const tempC = TEMP_MIN_C + ((px - M.left) / W) * (TEMP_MAX_C - TEMP_MIN_C);
+      const rh    = RH_MIN + (1 - (py - M.top) / H) * (RH_MAX - RH_MIN);
+      return { tempC, rh };
+    }
+
+    // ── Drawing ──────────────────────────────────────────────────────────────
+    function draw() {
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+
+      const plotW = W - M.left - M.right;
+      const plotH = H - M.top  - M.bottom;
+
+      // Background
+      ctx.fillStyle = '#161926';
+      ctx.beginPath();
+      ctx.roundRect(M.left, M.top, plotW, plotH, 4);
+      ctx.fill();
+
+      // ── Dew-point iso-curves ─────────────────────────────────────────────
+      // Contours for fixed dew-point values
+      const dpLevels = [-10, -5, 0, 5, 10, 15, 20, 25, 30];
+      const dpColors  = ['#1e3a5f','#1e4a6e','#1a5c7a','#166a7a','#117878',
+                         '#0e8070','#0d8c5a','#239c40','#5ab520'];
+
+      dpLevels.forEach((dp, i) => {
+        ctx.beginPath();
+        let first = true;
+        for (let tc = TEMP_MIN_C; tc <= TEMP_MAX_C; tc += 0.5) {
+          // rh such that dewPoint(tc, rh) = dp
+          // dp = 243.04 * (ln(rh/100) + 17.625*tc/(243.04+tc)) / (17.625 - ...)
+          // Solve for rh:
+          const a = 17.625, b = 243.04;
+          const gamma_dp = (a * dp) / (b + dp);
+          const gamma_t  = (a * tc) / (b + tc);
+          const lnRH100  = gamma_dp - gamma_t;
+          const rh = Math.exp(lnRH100) * 100;
+          if (rh < RH_MIN || rh > RH_MAX) { first = true; continue; }
+          const p = px(tc, rh);
+          first ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
+          first = false;
+        }
+        ctx.strokeStyle = dpColors[i];
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        // Label near right edge
+        const tc = TEMP_MAX_C - 2;
+        const a = 17.625, b = 243.04;
+        const gd = (a * dp) / (b + dp), gt = (a * tc) / (b + tc);
+        const rh = Math.exp(gd - gt) * 100;
+        if (rh >= RH_MIN + 3 && rh <= RH_MAX - 3) {
+          const p = px(tc, rh);
+          ctx.fillStyle = dpColors[i];
+          ctx.font = '10px system-ui';
+          ctx.textAlign = 'right';
+          const label = unit === 'C' ? `${dp}°C` : `${Math.round(toF(dp))}°F`;
+          ctx.fillText(label, p.x - 2, p.y - 3);
+        }
+      });
+
+      // ── Grid lines ───────────────────────────────────────────────────────
+      ctx.strokeStyle = '#2a3050';
+      ctx.lineWidth = 0.5;
+
+      // Vertical (temp)
+      const tempStep = 10;
+      for (let t = Math.ceil(TEMP_MIN_C / tempStep) * tempStep; t <= TEMP_MAX_C; t += tempStep) {
+        const p = px(t, 0);
+        ctx.beginPath(); ctx.moveTo(p.x, M.top); ctx.lineTo(p.x, M.top + plotH); ctx.stroke();
+      }
+
+      // Horizontal (RH)
+      for (let r = 0; r <= 100; r += 20) {
+        const p = px(TEMP_MIN_C, r);
+        ctx.beginPath(); ctx.moveTo(M.left, p.y); ctx.lineTo(M.left + plotW, p.y); ctx.stroke();
+      }
+
+      // ── Axes labels ──────────────────────────────────────────────────────
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '11px system-ui';
+
+      // X axis — temperature
+      ctx.textAlign = 'center';
+      for (let t = Math.ceil(TEMP_MIN_C / tempStep) * tempStep; t <= TEMP_MAX_C; t += tempStep) {
+        const p = px(t, RH_MIN);
+        const label = unit === 'C' ? `${t}°` : `${Math.round(toF(t))}°`;
+        ctx.fillText(label, p.x, M.top + plotH + 18);
+      }
+
+      // X axis title
+      ctx.fillStyle = '#64748b';
+      ctx.font = '12px system-ui';
+      ctx.fillText(`Temperature (°${unit})`, M.left + plotW / 2, H - 8);
+
+      // Y axis — RH
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '11px system-ui';
+      ctx.textAlign = 'right';
+      for (let r = 0; r <= 100; r += 20) {
+        const p = px(TEMP_MIN_C, r);
+        ctx.fillText(`${r}%`, M.left - 8, p.y + 4);
+      }
+
+      // Y axis title (rotated)
+      ctx.save();
+      ctx.fillStyle = '#64748b';
+      ctx.font = '12px system-ui';
+      ctx.translate(14, M.top + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'center';
+      ctx.fillText('Relative Humidity (%)', 0, 0);
+      ctx.restore();
+
+      // ── Dew-point iso label header ────────────────────────────────────────
+      ctx.fillStyle = '#475569';
+      ctx.font = '10px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText(`Dew point curves →`, M.left + 6, M.top + 12);
+
+      // ── Selected point ───────────────────────────────────────────────────
+      if (selectedPt) {
+        const { tempC, rh } = selectedPt;
+        const dp = dewPointC(tempC, rh);
+        const p  = px(tempC, rh);
+        const pd = px(tempC, rhForDewLine(tempC));  // not needed, just marker
+
+        // Crosshair lines
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(148,163,184,0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(M.left, p.y); ctx.lineTo(M.left + plotW, p.y);
+        ctx.moveTo(p.x, M.top);  ctx.lineTo(p.x, M.top + plotH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Dew point projection line on X axis
+        const pdX = px(dp, RH_MIN);
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y); ctx.lineTo(pdX.x, M.top + plotH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Dew-point tick on X axis
+        ctx.fillStyle = '#3b82f6';
+        ctx.beginPath();
+        ctx.arc(pdX.x, M.top + plotH, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Selected point dot
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(59,130,246,0.25)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#60a5fa';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Tooltip box
+        const dpLabel = fmt(dp);
+        const tLabel  = fmt(tempC);
+        const lines   = [`T = ${tLabel}`, `RH = ${rh.toFixed(0)}%`, `Td = ${dpLabel}`];
+        const bx = 7, by = 5, br = 6;
+        const lh = 16, tw = 110;
+        let tx = p.x + 14, ty = p.y - 10;
+        if (tx + tw > M.left + plotW) tx = p.x - tw - 14;
+        if (ty - by < M.top) ty = p.y + 14;
+
+        ctx.fillStyle = 'rgba(15,17,23,0.88)';
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 1;
+        roundRect(ctx, tx - bx, ty - by, tw, lines.length * lh + by * 2, br);
+        ctx.fill(); ctx.stroke();
+
+        ctx.font = '12px system-ui';
+        ctx.textAlign = 'left';
+        lines.forEach((l, i) => {
+          ctx.fillStyle = i === 2 ? '#60a5fa' : '#cbd5e1';
+          ctx.fillText(l, tx, ty + i * lh + 11);
+        });
+      }
+    }
+
+    function rhForDewLine(tc) { return 0; } // placeholder, not used
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    // ── Interaction ──────────────────────────────────────────────────────────
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    function handlePointer(e) {
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const plotW = canvas.width  - M.left - M.right;
+      const plotH = canvas.height - M.top  - M.bottom;
+
+      if (cx < M.left || cx > M.left + plotW || cy < M.top || cy > M.top + plotH) return;
+
+      const d = data(cx, cy);
+      selectedPt = {
+        tempC: clamp(d.tempC, TEMP_MIN_C, TEMP_MAX_C),
+        rh:    clamp(d.rh, 1, 100),
+      };
+      updateCards();
+      draw();
+    }
+
+    canvas.addEventListener('click',     handlePointer);
+    canvas.addEventListener('mousemove', e => { if (e.buttons === 1) handlePointer(e); });
+
+    function updateCards() {
+      if (!selectedPt) return;
+      const { tempC, rh } = selectedPt;
+      const dp = dewPointC(tempC, rh);
+
+      document.getElementById('valTemp').innerHTML = fmt(tempC);
+      document.getElementById('valRH').innerHTML   = `${rh.toFixed(0)}<span>%</span>`;
+      document.getElementById('valDew').innerHTML  = fmt(dp);
+      document.getElementById('valComfort').textContent = comfortLabel(dp);
+    }
+
+    // ── Unit toggle ──────────────────────────────────────────────────────────
+    function setUnit(u) {
+      unit = u;
+      document.getElementById('btnC').classList.toggle('active', u === 'C');
+      document.getElementById('btnF').classList.toggle('active', u === 'F');
+      if (selectedPt) updateCards();
+      draw();
+    }
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+    window.addEventListener('resize', resize);
+    resize();
+  </script>
+</body>
+</html>
