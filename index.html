@@ -539,6 +539,18 @@
       ctx.textAlign = 'left';
       ctx.fillText(`Dew point curves →`, m.left + 6, m.top + 12);
 
+      // ── Date / time ───────────────────────────────────────────────────────
+      const now = new Date();
+      const dateStr = now.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      const timeStr = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      ctx.fillStyle = 'rgba(148,163,184,0.6)';
+      ctx.font = '11px system-ui';
+      ctx.textAlign = 'right';
+      ctx.fillText(timeStr, m.left + plotW - 6, m.top + 14);
+      ctx.fillStyle = 'rgba(100,116,139,0.6)';
+      ctx.font = '10px system-ui';
+      ctx.fillText(dateStr, m.left + plotW - 6, m.top + 26);
+
       // ── Selected point ───────────────────────────────────────────────────
       if (selectedPt) {
         const { tempC, rh } = selectedPt;
@@ -739,11 +751,11 @@
 
     // ── Init ─────────────────────────────────────────────────────────────────
     window.addEventListener('resize', resize);
-    // Set default starting point
     selectedPt = { tempC: 20, rh: 50 };
     resize();
     syncControls();
     updateCards();
+    setInterval(draw, 1000);
   </script>
 </body>
 </html>
