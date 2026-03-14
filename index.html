@@ -248,6 +248,66 @@
       return { tempC, rh };
     }
 
+    // ── Comfort bands ────────────────────────────────────────────────────────
+    const COMFORT_BANDS = [
+      { lo: -Infinity, hi: 10, fill: 'rgba(59,130,246,0.55)',   label: 'Very dry',    textColor: '#93c5fd' },
+      { lo: 10,        hi: 16, fill: 'rgba(34,197,94,0.52)',    label: 'Comfortable', textColor: '#86efac' },
+      { lo: 16,        hi: 21, fill: 'rgba(234,179,8,0.52)',    label: 'Humid',       textColor: '#fde047' },
+      { lo: 21,        hi: 24, fill: 'rgba(249,115,22,0.58)',   label: 'Quite humid', textColor: '#fdba74' },
+      { lo: 24,        hi: Infinity, fill: 'rgba(239,68,68,0.62)', label: 'Oppressive', textColor: '#fca5a5' },
+    ];
+
+    function rhForDp(dp, tc) {
+      const a = 17.625, b = 243.04;
+      return Math.exp((a * dp) / (b + dp) - (a * tc) / (b + tc)) * 100;
+    }
+
+    function drawComfortBands(plotW, plotH) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(M.left, M.top, plotW, plotH);
+      ctx.clip();
+
+      const step = 0.5;
+      const temps = [];
+      for (let tc = TEMP_MIN_C; tc <= TEMP_MAX_C; tc += step) temps.push(tc);
+
+      COMFORT_BANDS.forEach(({ lo, hi, fill, label, textColor }) => {
+        // Upper boundary points (left → right)
+        const upper = temps.map(tc => {
+          const rh = hi === Infinity ? RH_MAX : Math.min(rhForDp(hi, tc), RH_MAX);
+          return px(tc, Math.max(rh, RH_MIN));
+        });
+        // Lower boundary points (right → left)
+        const lower = temps.map(tc => {
+          const rh = lo === -Infinity ? RH_MIN : Math.max(rhForDp(lo, tc), RH_MIN);
+          return px(tc, Math.min(rh, RH_MAX));
+        });
+
+        ctx.beginPath();
+        upper.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+        [...lower].reverse().forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.closePath();
+        ctx.fillStyle = fill;
+        ctx.fill();
+
+        // Band label — positioned at a fixed temp, mid-RH of band
+        const labelTc = TEMP_MIN_C + (TEMP_MAX_C - TEMP_MIN_C) * 0.08;
+        const rhLo = lo === -Infinity ? RH_MIN : Math.max(rhForDp(lo, labelTc), RH_MIN);
+        const rhHi = hi === Infinity  ? RH_MAX : Math.min(rhForDp(hi, labelTc), RH_MAX);
+        if (rhHi - rhLo > 4) {
+          const midRh = (rhLo + rhHi) / 2;
+          const lp = px(labelTc, midRh);
+          ctx.fillStyle = textColor;
+          ctx.font = `italic 11px system-ui`;
+          ctx.textAlign = 'left';
+          ctx.fillText(label, lp.x + 4, lp.y + 4);
+        }
+      });
+
+      ctx.restore();
+    }
+
     // ── Drawing ──────────────────────────────────────────────────────────────
     function draw() {
       const W = canvas.width, H = canvas.height;
@@ -261,6 +321,9 @@
       ctx.beginPath();
       ctx.roundRect(M.left, M.top, plotW, plotH, 4);
       ctx.fill();
+
+      // ── Comfort bands ─────────────────────────────────────────────────────
+      drawComfortBands(plotW, plotH);
 
       // ── Dew-point iso-curves ─────────────────────────────────────────────
       // Contours for fixed dew-point values
@@ -368,7 +431,6 @@
         const { tempC, rh } = selectedPt;
         const dp = dewPointC(tempC, rh);
         const p  = px(tempC, rh);
-        const pd = px(tempC, rhForDewLine(tempC));  // not needed, just marker
 
         // Crosshair lines
         ctx.setLineDash([4, 4]);
@@ -433,8 +495,6 @@
         });
       }
     }
-
-    function rhForDewLine(tc) { return 0; } // placeholder, not used
 
     function roundRect(ctx, x, y, w, h, r) {
       ctx.beginPath();
