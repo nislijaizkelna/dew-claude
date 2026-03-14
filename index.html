@@ -156,12 +156,87 @@
       color: #475569;
       text-align: center;
     }
+
+    .controls {
+      width: 100%;
+      background: #1e2130;
+      border: 1px solid #2d3348;
+      border-radius: 10px;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ctrl-label {
+      font-size: 0.75rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      width: 56px;
+      flex-shrink: 0;
+    }
+
+    .ctrl-input {
+      background: #0f1117;
+      border: 1px solid #2d3348;
+      border-radius: 6px;
+      color: #f1f5f9;
+      font-size: 0.9rem;
+      padding: 5px 8px;
+      width: 72px;
+      flex-shrink: 0;
+      text-align: right;
+      -moz-appearance: textfield;
+    }
+    .ctrl-input::-webkit-inner-spin-button,
+    .ctrl-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .ctrl-input:focus { outline: none; border-color: #3b82f6; }
+
+    .ctrl-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      border-radius: 2px;
+      background: #2d3348;
+      outline: none;
+      cursor: pointer;
+    }
+    .ctrl-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #3b82f6;
+      cursor: pointer;
+      border: 2px solid #fff;
+      box-shadow: 0 0 4px rgba(59,130,246,0.5);
+    }
+    .ctrl-slider::-moz-range-thumb {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #3b82f6;
+      cursor: pointer;
+      border: 2px solid #fff;
+    }
+    .ctrl-unit {
+      font-size: 0.8rem;
+      color: #475569;
+      width: 24px;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
   <div>
     <h1>Dew Point Calculator</h1>
-    <p class="subtitle">Click anywhere on the chart to set temperature &amp; relative humidity</p>
+    <p class="subtitle">Click the chart or use the sliders &amp; inputs below</p>
   </div>
 
   <div class="temp-toggle">
@@ -172,6 +247,21 @@
   <div class="container">
     <div class="graph-wrapper">
       <canvas id="chart"></canvas>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl-row">
+        <span class="ctrl-label">Temp</span>
+        <input class="ctrl-input" type="number" id="inpTemp" step="0.1">
+        <input class="ctrl-slider" type="range" id="sldTemp" step="0.1">
+        <span class="ctrl-unit" id="unitTemp">°C</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Humidity</span>
+        <input class="ctrl-input" type="number" id="inpRH" min="1" max="100" step="1" value="50">
+        <input class="ctrl-slider" type="range" id="sldRH" min="1" max="100" step="1" value="50">
+        <span class="ctrl-unit">%</span>
+      </div>
     </div>
 
     <div class="result-card">
@@ -554,6 +644,7 @@
         rh:    clamp(d.rh, 1, 100),
       };
       updateCards();
+      syncControls();
       draw();
     }
 
@@ -579,18 +670,80 @@
       document.getElementById('valComfort').textContent = comfortLabel(dp);
     }
 
+    // ── Controls sync ────────────────────────────────────────────────────────
+    const sldTemp = document.getElementById('sldTemp');
+    const sldRH   = document.getElementById('sldRH');
+    const inpTemp = document.getElementById('inpTemp');
+    const inpRH   = document.getElementById('inpRH');
+
+    function getTempRange() {
+      return unit === 'C'
+        ? { min: TEMP_MIN_C, max: TEMP_MAX_C }
+        : { min: Math.round(toF(TEMP_MIN_C)), max: Math.round(toF(TEMP_MAX_C)) };
+    }
+
+    function syncControls() {
+      if (!selectedPt) return;
+      const { tempC, rh } = selectedPt;
+      const dispT = unit === 'C' ? tempC : toF(tempC);
+      const { min, max } = getTempRange();
+
+      sldTemp.min = min; sldTemp.max = max;
+      inpTemp.min = min; inpTemp.max = max;
+      sldTemp.value = dispT.toFixed(1);
+      inpTemp.value = dispT.toFixed(1);
+      sldRH.value   = rh.toFixed(0);
+      inpRH.value   = rh.toFixed(0);
+      document.getElementById('unitTemp').textContent = '°' + unit;
+    }
+
+    function applyTempInput(val) {
+      const num = parseFloat(val);
+      if (isNaN(num)) return;
+      const { min, max } = getTempRange();
+      const clamped = Math.max(min, Math.min(max, num));
+      const tempC = unit === 'C' ? clamped : toC(clamped);
+      selectedPt = { tempC, rh: selectedPt ? selectedPt.rh : 50 };
+      syncControls(); updateCards(); draw();
+    }
+
+    function applyRHInput(val) {
+      const rh = Math.max(1, Math.min(100, parseFloat(val) || 1));
+      selectedPt = { tempC: selectedPt ? selectedPt.tempC : 20, rh };
+      syncControls(); updateCards(); draw();
+    }
+
+    sldTemp.addEventListener('input', () => applyTempInput(sldTemp.value));
+    inpTemp.addEventListener('input', () => applyTempInput(inpTemp.value));
+    inpTemp.addEventListener('change', () => {
+      const { min, max } = getTempRange();
+      inpTemp.value = Math.max(min, Math.min(max, parseFloat(inpTemp.value) || min));
+      applyTempInput(inpTemp.value);
+    });
+
+    sldRH.addEventListener('input', () => applyRHInput(sldRH.value));
+    inpRH.addEventListener('input', () => applyRHInput(inpRH.value));
+    inpRH.addEventListener('change', () => {
+      inpRH.value = Math.max(1, Math.min(100, parseFloat(inpRH.value) || 1));
+      applyRHInput(inpRH.value);
+    });
+
     // ── Unit toggle ──────────────────────────────────────────────────────────
     function setUnit(u) {
       unit = u;
       document.getElementById('btnC').classList.toggle('active', u === 'C');
       document.getElementById('btnF').classList.toggle('active', u === 'F');
-      if (selectedPt) updateCards();
+      if (selectedPt) { syncControls(); updateCards(); }
       draw();
     }
 
     // ── Init ─────────────────────────────────────────────────────────────────
     window.addEventListener('resize', resize);
+    // Set default starting point
+    selectedPt = { tempC: 20, rh: 50 };
     resize();
+    syncControls();
+    updateCards();
   </script>
 </body>
 </html>
