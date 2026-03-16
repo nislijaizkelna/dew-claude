@@ -231,6 +231,143 @@
       width: 24px;
       flex-shrink: 0;
     }
+
+    /* ── HA button ── */
+    .ha-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-top: 4px;
+      border-top: 1px solid #2d3348;
+    }
+
+    .btn-ha {
+      flex: 1;
+      background: #1a3a5c;
+      border: 1px solid #2563eb;
+      color: #93c5fd;
+      border-radius: 7px;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+    .btn-ha:hover { background: #1e4a80; }
+    .btn-ha:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-settings {
+      background: transparent;
+      border: 1px solid #2d3348;
+      color: #64748b;
+      border-radius: 7px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .btn-settings:hover { color: #94a3b8; border-color: #475569; }
+
+    .ha-status {
+      font-size: 0.75rem;
+      color: #475569;
+      text-align: center;
+    }
+    .ha-status.ok  { color: #4ade80; }
+    .ha-status.err { color: #f87171; }
+
+    /* ── Modal ── */
+    .modal-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-backdrop.open { display: flex; }
+
+    .modal {
+      background: #1e2130;
+      border: 1px solid #3b4060;
+      border-radius: 14px;
+      padding: 24px;
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .modal h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+
+    .modal-field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .modal-field label {
+      font-size: 0.75rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+
+    .modal-field input {
+      background: #0f1117;
+      border: 1px solid #2d3348;
+      border-radius: 6px;
+      color: #f1f5f9;
+      font-size: 0.875rem;
+      padding: 8px 10px;
+      width: 100%;
+    }
+    .modal-field input:focus { outline: none; border-color: #3b82f6; }
+
+    .modal-note {
+      font-size: 0.75rem;
+      color: #475569;
+      line-height: 1.5;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .btn-save {
+      background: #2563eb;
+      border: none;
+      color: #fff;
+      border-radius: 7px;
+      padding: 8px 20px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-save:hover { background: #1d4ed8; }
+
+    .btn-cancel {
+      background: transparent;
+      border: 1px solid #2d3348;
+      color: #94a3b8;
+      border-radius: 7px;
+      padding: 8px 16px;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .btn-cancel:hover { border-color: #475569; }
   </style>
 </head>
 <body>
@@ -262,7 +399,43 @@
         <input class="ctrl-slider" type="range" id="sldRH" min="1" max="100" step="1" value="50">
         <span class="ctrl-unit">%</span>
       </div>
+      <div class="ha-row">
+        <button class="btn-ha" id="btnHA" onclick="fetchFromHA()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          Read from Home Assistant
+        </button>
+        <button class="btn-settings" title="HA Settings" onclick="openSettings()">⚙</button>
+      </div>
+      <div class="ha-status" id="haStatus"></div>
     </div>
+
+  <!-- HA Settings Modal -->
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal">
+      <h2>Home Assistant Settings</h2>
+      <div class="modal-field">
+        <label>HA URL</label>
+        <input type="url" id="cfgUrl" placeholder="http://192.168.1.x:8123">
+      </div>
+      <div class="modal-field">
+        <label>Long-lived Access Token</label>
+        <input type="password" id="cfgToken" placeholder="eyJ...">
+      </div>
+      <div class="modal-field">
+        <label>Temperature Entity ID</label>
+        <input type="text" id="cfgTempEntity" placeholder="sensor.temp_mi_1_wc_temperature">
+      </div>
+      <div class="modal-field">
+        <label>Humidity Entity ID</label>
+        <input type="text" id="cfgRhEntity" placeholder="sensor.temp_mi_1_wc_humidity">
+      </div>
+      <p class="modal-note">Credentials are stored only in your browser's localStorage — never sent anywhere except your HA instance.</p>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
+        <button class="btn-save" onclick="saveSettings()">Save</button>
+      </div>
+    </div>
+  </div>
 
     <div class="result-card">
       <div class="card">
@@ -746,6 +919,87 @@
       document.getElementById('btnF').classList.toggle('active', u === 'F');
       if (selectedPt) { syncControls(); updateCards(); }
       draw();
+    }
+
+    // ── Home Assistant ───────────────────────────────────────────────────────
+    const LS_KEY = 'dewpoint_ha_cfg';
+
+    function loadHACfg() {
+      try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
+    }
+
+    function openSettings() {
+      const cfg = loadHACfg();
+      document.getElementById('cfgUrl').value        = cfg.url        || '';
+      document.getElementById('cfgToken').value      = cfg.token      || '';
+      document.getElementById('cfgTempEntity').value = cfg.tempEntity || 'sensor.temp_mi_1_wc_temperature';
+      document.getElementById('cfgRhEntity').value   = cfg.rhEntity   || 'sensor.temp_mi_1_wc_humidity';
+      document.getElementById('modalBackdrop').classList.add('open');
+    }
+
+    function closeSettings() {
+      document.getElementById('modalBackdrop').classList.remove('open');
+    }
+
+    function saveSettings() {
+      const cfg = {
+        url:        document.getElementById('cfgUrl').value.replace(/\/$/, ''),
+        token:      document.getElementById('cfgToken').value.trim(),
+        tempEntity: document.getElementById('cfgTempEntity').value.trim(),
+        rhEntity:   document.getElementById('cfgRhEntity').value.trim(),
+      };
+      localStorage.setItem(LS_KEY, JSON.stringify(cfg));
+      closeSettings();
+      setHAStatus('Settings saved.', '');
+    }
+
+    document.getElementById('modalBackdrop').addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeSettings();
+    });
+
+    function setHAStatus(msg, type) {
+      const el = document.getElementById('haStatus');
+      el.textContent = msg;
+      el.className = 'ha-status' + (type ? ' ' + type : '');
+    }
+
+    async function fetchEntity(url, token, entityId) {
+      const res = await fetch(`${url}/api/states/${entityId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) throw new Error(`${entityId}: HTTP ${res.status}`);
+      const json = await res.json();
+      const val = parseFloat(json.state);
+      if (isNaN(val)) throw new Error(`${entityId}: unexpected value "${json.state}"`);
+      return val;
+    }
+
+    async function fetchFromHA() {
+      const cfg = loadHACfg();
+      if (!cfg.url || !cfg.token) {
+        openSettings();
+        setHAStatus('Please fill in HA settings first.', 'err');
+        return;
+      }
+      const btn = document.getElementById('btnHA');
+      btn.disabled = true;
+      setHAStatus('Fetching…', '');
+      try {
+        const [tempC, rh] = await Promise.all([
+          fetchEntity(cfg.url, cfg.token, cfg.tempEntity || 'sensor.temp_mi_1_wc_temperature'),
+          fetchEntity(cfg.url, cfg.token, cfg.rhEntity   || 'sensor.temp_mi_1_wc_humidity'),
+        ]);
+        selectedPt = {
+          tempC: clamp(tempC, TEMP_MIN_C, TEMP_MAX_C),
+          rh:    clamp(rh, 1, 100),
+        };
+        syncControls(); updateCards(); draw();
+        setHAStatus(`Live: ${tempC.toFixed(1)}°C · ${rh.toFixed(0)}% RH`, 'ok');
+      } catch (err) {
+        setHAStatus('Error: ' + err.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
     }
 
     // ── Init ─────────────────────────────────────────────────────────────────
