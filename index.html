@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dew Point Calculator</title>
+  <title>Dew Point Calculator Ika</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -372,7 +372,7 @@
 </head>
 <body>
   <div>
-    <h1>Dew Point Calculator</h1>
+    <h1>Dew Point Calculator Ika</h1>
     <p class="subtitle">Click the chart or use the sliders &amp; inputs below</p>
   </div>
 
@@ -996,7 +996,11 @@
         syncControls(); updateCards(); draw();
         setHAStatus(`Live: ${tempC.toFixed(1)}°C · ${rh.toFixed(0)}% RH`, 'ok');
       } catch (err) {
-        setHAStatus('Error: ' + err.message, 'err');
+        let msg = err.message;
+        if (msg === 'Failed to fetch') {
+          msg = 'Failed to fetch — possible causes: HA unreachable, wrong URL, or CORS not configured (add cors_allowed_origins to configuration.yaml)';
+        }
+        setHAStatus('Error: ' + msg, 'err');
       } finally {
         btn.disabled = false;
       }
